@@ -105,7 +105,7 @@ const PAGE = `<!DOCTYPE html>
 
 <div class="win">
   <div class="bar">
-    <span>Production Board &mdash; Editor &middot; v8</span>
+    <span>Production Board &mdash; Editor &middot; v9</span>
     <span class="btns"><button>_</button><button>[]</button><button>X</button></span>
   </div>
   <div class="pad toprow">
@@ -275,52 +275,131 @@ const DISPLAY = `<!DOCTYPE html>
 <title>Display</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family:-apple-system,Helvetica,Arial,sans-serif; background:#008080; height:100vh; display:flex; align-items:center; justify-content:center; color:#fff; }
-  h1 { margin-bottom:30px; }
-  .cards { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
-  .card { background:#fff; color:#000; padding:24px; border-radius:8px; box-shadow:0 4px 8px rgba(0,0,0,.3); text-align:center; min-width:220px; }
-  .circle { width:90px; height:90px; border-radius:50%; background:#4a90e2; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:24px; margin:0 auto 14px; }
-  .name { font-size:18px; font-weight:bold; margin-bottom:6px; }
-  button { position:fixed; bottom:20px; left:20px; padding:10px 16px; background:#4a90e2; color:#fff; border:none; border-radius:4px; cursor:pointer; }
+  html,body { width:100%; height:100%; }
+  body { font-family:"MS Sans Serif",Arial,sans-serif; background:#008080; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+
+  /* 4:3 frame that fits the screen */
+  .frame {
+    aspect-ratio:4/3;
+    width:min(100vw, calc(100vh * 4 / 3));
+    height:min(100vh, calc(100vw * 3 / 4));
+    background:#c0c0c0;
+    border:3px solid; border-color:#dfdfdf #808080 #808080 #dfdfdf;
+    box-shadow:2px 2px #fff inset,-2px -2px #808080 inset;
+    display:flex; flex-direction:column;
+  }
+  .frame-bar {
+    background:linear-gradient(90deg,#000080,#1084d7); color:#fff;
+    padding:5px 8px; font-weight:bold; font-size:16px;
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .frame-body { flex:1; display:flex; flex-direction:column; gap:12px; padding:14px; }
+
+  .card {
+    flex:1; background:#c0c0c0;
+    border:2px solid; border-color:#dfdfdf #808080 #808080 #dfdfdf;
+    box-shadow:1px 1px #fff inset,-1px -1px #808080 inset;
+    display:flex; flex-direction:column;
+  }
+  .card-bar {
+    background:linear-gradient(90deg,#000080,#1084d7); color:#fff;
+    padding:4px 8px; font-weight:bold; font-size:15px;
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .card-body { flex:1; display:flex; align-items:center; padding:10px 16px; gap:20px; }
+  .meta { flex:1; min-width:0; }
+  .meta .client { font-size:15px; margin-bottom:3px; }
+  .meta .status { font-size:14px; color:#000080; font-weight:bold; }
+
+  .prog-wrap { display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+  .prog-pct { font-size:14px; font-weight:bold; }
+  .squares { display:flex; gap:4px; }
+  .sq {
+    width:26px; height:26px;
+    border:2px solid; border-color:#808080 #dfdfdf #dfdfdf #808080;
+    background:#fff;
+  }
+  .sq.on { background:#000080; }
+
+  .empty { flex:1; display:flex; align-items:center; justify-content:center; color:#808080; font-size:16px; }
+
+  .back {
+    position:fixed; bottom:16px; left:16px;
+    font-family:"MS Sans Serif",Arial,sans-serif; font-size:13px; padding:6px 14px;
+    border:2px solid; border-color:#dfdfdf #808080 #808080 #dfdfdf;
+    background:#c0c0c0; color:#000; cursor:pointer;
+  }
+  .back:active { border-color:#808080 #dfdfdf #dfdfdf #808080; }
 </style>
 </head>
 <body>
-<div style="text-align:center">
-  <h1>Production</h1>
-  <div class="cards" id="cards"><div style="grid-column:1/-1">Loading...</div></div>
+<div class="frame">
+  <div class="frame-bar"><span>Production Board &mdash; Display</span><span id="clock"></span></div>
+  <div class="frame-body" id="body">
+    <div class="empty">Loading...</div>
+  </div>
 </div>
-<button id="back">&larr; Back</button>
+<button class="back" id="back">&larr; Back to editor</button>
 <script>
 var jobs=[], idx=0, mode="regular", timer=null;
 document.getElementById("back").addEventListener("click", function(){ location.href="/edit"; });
+
 function urgent(j){ return (/urgent|asap/i).test(j.next||""); }
-function card(j){
-  var d=document.createElement("div"); d.className="card";
-  var c=document.createElement("div"); c.className="circle"; c.textContent=(j.progress||0)+"%";
-  var n=document.createElement("div"); n.className="name"; n.textContent=j.title||"";
-  var info=document.createElement("div");
-  info.appendChild(document.createTextNode(j.client||"")); info.appendChild(document.createElement("br")); info.appendChild(document.createTextNode(j.status||""));
-  d.appendChild(c); d.appendChild(n); d.appendChild(info); return d;
+
+function tick(){
+  var d=new Date();
+  var h=d.getHours(), m=d.getMinutes();
+  var ap=h>=12?"PM":"AM"; var hh=h%12; if(hh===0)hh=12;
+  document.getElementById("clock").textContent = hh+":"+(m<10?"0"+m:m)+" "+ap;
 }
+
+function squares(progress){
+  var filled = Math.round((progress||0)/10); // 0-10 squares
+  if(filled<0)filled=0; if(filled>10)filled=10;
+  var html='<div class="squares">';
+  for(var i=1;i<=10;i++){ html += '<div class="sq'+(i<=filled?' on':'')+'"></div>'; }
+  html+='</div>';
+  return html;
+}
+
+function cardHtml(j){
+  return '<div class="card">' +
+    '<div class="card-bar"><span>'+escapeHtml(j.title||"")+'</span></div>' +
+    '<div class="card-body">' +
+      '<div class="meta">' +
+        '<div class="client">'+escapeHtml(j.client||"")+'</div>' +
+        '<div class="status">'+escapeHtml(j.status||"")+'</div>' +
+      '</div>' +
+      '<div class="prog-wrap"><div class="prog-pct">'+(j.progress||0)+'%</div>'+squares(j.progress)+'</div>' +
+    '</div>' +
+  '</div>';
+}
+
+function escapeHtml(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
 function draw(){
   var list = mode==="urgent" ? jobs.filter(urgent) : jobs.filter(function(j){return !urgent(j);});
-  var cont=document.getElementById("cards"); cont.innerHTML="";
-  if(list.length===0){ cont.innerHTML='<div style="grid-column:1/-1">No jobs</div>'; return; }
-  cont.appendChild(card(list[idx % list.length]));
-  cont.appendChild(card(list[(idx+1) % list.length]));
+  var body=document.getElementById("body");
+  if(list.length===0){ body.innerHTML='<div class="empty">No jobs to show</div>'; return; }
+  var a=list[idx % list.length];
+  var b=list[(idx+1) % list.length];
+  body.innerHTML = cardHtml(a) + cardHtml(b);
 }
+
 function rotate(){
   var list = mode==="urgent" ? jobs.filter(urgent) : jobs.filter(function(j){return !urgent(j);});
-  idx++;
+  idx += 2;
   if(idx>=list.length){ idx=0; var hu=jobs.some(urgent), hr=jobs.some(function(j){return !urgent(j);}); mode=(mode==="urgent"&&hr)?"regular":(hu?"urgent":"regular"); }
   draw();
 }
+
 function load(){
   fetch("/jobs").then(function(r){return r.json();}).then(function(d){
     jobs=d.jobs||[]; idx=0; mode=jobs.some(urgent)?"urgent":"regular"; draw();
     if(timer)clearInterval(timer); timer=setInterval(rotate, mode==="urgent"?15000:30000);
   });
 }
+tick(); setInterval(tick,10000);
 load(); setInterval(load,60000);
 </script>
 </body>
