@@ -111,7 +111,7 @@ const PAGE = `<!DOCTYPE html>
 
 <div class="win">
   <div class="bar">
-    <span>Production Board &mdash; Editor &middot; v10</span>
+    <span>Production Board &mdash; Editor &middot; v11</span>
     <span class="btns"><button>_</button><button>[]</button><button>X</button></span>
   </div>
   <div class="pad toprow">
@@ -301,10 +301,10 @@ const DISPLAY = `<!DOCTYPE html>
     padding:5px 8px; font-weight:bold; font-size:16px;
     display:flex; justify-content:space-between; align-items:center;
   }
-  .frame-body { flex:1; display:flex; flex-direction:column; gap:12px; padding:14px; }
+  .frame-body { flex:1; display:flex; flex-direction:column; gap:14px; padding:16px; justify-content:center; }
 
   .card {
-    flex:1; background:#c0c0c0;
+    background:#c0c0c0;
     border:2px solid; border-color:#dfdfdf #808080 #808080 #dfdfdf;
     box-shadow:1px 1px #fff inset,-1px -1px #808080 inset;
     display:flex; flex-direction:column;
@@ -314,7 +314,7 @@ const DISPLAY = `<!DOCTYPE html>
     padding:4px 8px; font-weight:bold; font-size:15px;
     display:flex; justify-content:space-between; align-items:center;
   }
-  .card-body { flex:1; display:flex; align-items:center; padding:10px 16px; gap:20px; }
+  .card-body { display:flex; align-items:center; padding:14px 18px; gap:20px; }
   .meta { flex:1; min-width:0; }
   .meta .client { font-size:15px; margin-bottom:3px; }
   .meta .status { font-size:14px; color:#000080; font-weight:bold; }
