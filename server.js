@@ -111,7 +111,7 @@ const PAGE = `<!DOCTYPE html>
 
 <div class="win">
   <div class="bar">
-    <span>Production Board &mdash; Editor &middot; v13</span>
+    <span>Production Board &mdash; Editor &middot; v14</span>
     <span class="btns"><button>_</button><button>[]</button><button>X</button></span>
   </div>
   <div class="pad toprow">
@@ -334,7 +334,7 @@ const DISPLAY = `<!DOCTYPE html>
   .meta .notes { font-size:13px; color:#000; margin-top:8px; line-height:1.35; }
   .empty { flex:1; display:flex; align-items:center; justify-content:center; color:#808080; font-size:16px; }
   @keyframes softblink { 0%,100%{ opacity:1; } 50%{ opacity:0.45; } }
-  .card.blink { animation: softblink 1.5s ease-in-out infinite; }
+  .sq.blink { animation: softblink 1.5s ease-in-out infinite; }
   .card-bar.alert { background:linear-gradient(90deg,#900000,#e04040); }
   .tag { font-size:12px; font-weight:bold; background:#ffe000; color:#000; padding:1px 7px; border:1px solid #806000; margin-left:8px; white-space:nowrap; }
   .urgent-empty { opacity:0.65; }
@@ -415,11 +415,15 @@ function tick(){
   document.getElementById("clock").textContent = hh+":"+(m<10?"0"+m:m)+" "+ap;
 }
 
-function squares(progress){
+function squares(progress, blinkLast){
   var filled = Math.round((progress||0)/10); // 0-10 squares
   if(filled<0)filled=0; if(filled>10)filled=10;
   var html='<div class="squares">';
-  for(var i=1;i<=10;i++){ html += '<div class="sq'+(i<=filled?' on':'')+'"></div>'; }
+  for(var i=1;i<=10;i++){
+    var on = i<=filled;
+    var cls = 'sq' + (on?' on':'') + ((blinkLast && on && i===filled)?' blink':'');
+    html += '<div class="'+cls+'"></div>';
+  }
   html+='</div>';
   return html;
 }
@@ -430,7 +434,7 @@ function cardHtml(j, opts){
   var notesHtml = notes ? '<div class="notes">'+escapeHtml(notes)+'</div>' : '';
   var barClass = opts.alert ? 'card-bar alert' : 'card-bar';
   var tag = opts.alert ? '<span class="tag">'+alertLabel(j)+'</span>' : '';
-  var cardClass = opts.blink ? 'card blink' : 'card';
+  var cardClass = 'card';
   return '<div class="'+cardClass+'">' +
     '<div class="'+barClass+'"><span class="titlewrap"><img class="pico" src="'+iconFor(j)+'"><span>'+escapeHtml(j.title||"")+'</span></span>'+tag+'</div>' +
     '<div class="card-body">' +
@@ -439,7 +443,7 @@ function cardHtml(j, opts){
         '<div class="status">'+escapeHtml(j.status||"")+'</div>' +
         notesHtml +
       '</div>' +
-      '<div class="prog-wrap"><div class="prog-pct">'+(j.progress||0)+'%</div>'+squares(j.progress)+'</div>' +
+      '<div class="prog-wrap"><div class="prog-pct">'+(j.progress||0)+'%</div>'+squares(j.progress, opts.blink)+'</div>' +
     '</div>' +
   '</div>';
 }
