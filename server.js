@@ -111,7 +111,7 @@ const PAGE = `<!DOCTYPE html>
 
 <div class="win">
   <div class="bar">
-    <span>Production Board &mdash; Editor &middot; v14</span>
+    <span>Production Board &mdash; Editor &middot; v16</span>
     <span class="btns"><button>_</button><button>[]</button><button>X</button></span>
   </div>
   <div class="pad toprow">
@@ -339,6 +339,11 @@ const DISPLAY = `<!DOCTYPE html>
   .tag { font-size:12px; font-weight:bold; background:#ffe000; color:#000; padding:1px 7px; border:1px solid #806000; margin-left:8px; white-space:nowrap; }
   .urgent-empty { opacity:0.65; }
   .urgent-empty .card-body { justify-content:center; color:#555; font-size:14px; padding:14px; }
+  .clockwin { background:#c0c0c0; border:2px solid; border-color:#dfdfdf #808080 #808080 #dfdfdf; box-shadow:1px 1px #fff inset,-1px -1px #808080 inset; }
+  .clockwin .card-bar { font-size:13px; }
+  .clock-body { display:flex; align-items:center; justify-content:space-between; padding:8px 18px; }
+  .clock-time { font-family:"Courier New",monospace; font-size:38px; font-weight:bold; color:#000; letter-spacing:1px; line-height:1; }
+  .clock-date { font-size:14px; color:#000; margin-top:4px; }
 
   .back {
     position:fixed; bottom:16px; left:16px;
@@ -408,11 +413,21 @@ function cleanNotes(text){
   return String(text||"").replace(/\\$\\S+/g, "").replace(/\\s{2,}/g," ").trim();
 }
 
+function pad2(n){ return n<10?"0"+n:""+n; }
 function tick(){
   var d=new Date();
-  var h=d.getHours(), m=d.getMinutes();
+  var h=d.getHours(), m=d.getMinutes(), sec=d.getSeconds();
   var ap=h>=12?"PM":"AM"; var hh=h%12; if(hh===0)hh=12;
-  document.getElementById("clock").textContent = hh+":"+(m<10?"0"+m:m)+" "+ap;
+  var el=document.getElementById("clock");
+  if(el) el.textContent = hh+":"+pad2(m)+" "+ap;
+  var t=document.getElementById("clockTime");
+  var dt=document.getElementById("clockDate");
+  if(t) t.textContent = pad2(hh)+":"+pad2(m)+":"+pad2(sec)+" "+ap;
+  if(dt){
+    var days=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+    var mo=["January","February","March","April","May","June","July","August","September","October","November","December"];
+    dt.textContent = days[d.getDay()]+", "+mo[d.getMonth()]+" "+pad2(d.getDate())+", "+d.getFullYear();
+  }
 }
 
 function squares(progress, blinkLast){
@@ -456,13 +471,14 @@ function draw(){
   var html = "";
   var alerts = jobs.filter(isAlert);
   if(alerts.length>0){
-    html += cardHtml(alerts[alertIdx % alerts.length], {alert:true});
+    html += cardHtml(alerts[alertIdx % alerts.length], {alert:true, blink:true});
   } else {
     html += '<div class="card urgent-empty"><div class="card-bar alert"><span class="titlewrap"><span>Urgent / Upcoming</span></span></div><div class="card-body">No urgent or upcoming items</div></div>';
   }
+  html += '<div class="clockwin"><div class="card-bar"><span class="titlewrap"><span>Date / Time</span></span></div><div class="clock-body"><div><div class="clock-time" id="clockTime">--:--:--</div><div class="clock-date" id="clockDate"></div></div></div></div>';
   var a = jobs[bottomIdx % jobs.length];
   var b = jobs[(bottomIdx+1) % jobs.length];
-  html += cardHtml(a, {});
+  html += cardHtml(a, {blink:true});
   html += cardHtml(b, {blink:true});
   body.innerHTML = html;
 }
@@ -481,7 +497,7 @@ function load(){
     if(timer)clearInterval(timer); timer=setInterval(rotate, 10000);
   });
 }
-tick(); setInterval(tick,10000);
+tick(); setInterval(tick,1000);
 load(); setInterval(load,60000);
 </script>
 </body>
