@@ -105,6 +105,9 @@ const PAGE = `<!DOCTYPE html>
   .prog input[type=range] { flex:1; }
   .prog button { width:34px; padding:5px 0; font-weight:bold; font-size:15px; }
   .searchwin input { width:100%; }
+  .taskline { display:flex; align-items:flex-start; gap:6px; font-weight:normal; margin:3px 0; }
+  .taskline input { width:auto; margin-top:2px; }
+  .synced { font-size:11px; color:#404040; font-style:italic; margin-top:4px; }
   .banner { background:#ffffcc; border:2px solid; border-color:#808080 #dfdfdf #dfdfdf #808080; padding:5px 8px; font-size:11px; color:#806000; }
 </style>
 </head>
@@ -112,7 +115,7 @@ const PAGE = `<!DOCTYPE html>
 
 <div class="win">
   <div class="bar">
-    <span>Production Board &mdash; Editor &middot; v18</span>
+    <span>Production Board &mdash; Editor &middot; v19</span>
     <span class="btns"><button>_</button><button>[]</button><button>X</button></span>
   </div>
   <div class="pad toprow">
@@ -223,6 +226,28 @@ function buildCard(j){
   var ta = document.createElement("textarea"); ta.value=j.next||"";
   ta.addEventListener("change", function(){ upd(j.id,"next",ta.value); });
   nRow.appendChild(ta); pad.appendChild(nRow);
+
+  if(j.tasks && j.tasks.length){
+    var tRow = document.createElement("div"); tRow.className="row";
+    var tLbl = document.createElement("label");
+    var openCount = j.tasks.filter(function(t){ return !t.done; }).length;
+    tLbl.textContent = "Tasks from email (" + openCount + " open)";
+    tRow.appendChild(tLbl);
+    j.tasks.forEach(function(t, ti){
+      var line = document.createElement("label"); line.className="taskline";
+      var cb = document.createElement("input"); cb.type="checkbox"; cb.checked=!!t.done;
+      cb.addEventListener("change", function(){ j.tasks[ti].done = cb.checked; save(); });
+      var tx = document.createElement("span"); tx.textContent = t.text;
+      if(t.done) tx.style.textDecoration = "line-through";
+      line.appendChild(cb); line.appendChild(tx); tRow.appendChild(line);
+    });
+    pad.appendChild(tRow);
+  }
+  if(j.lastSynced){
+    var sy = document.createElement("div"); sy.className="synced";
+    sy.textContent = "Synced from email " + new Date(j.lastSynced).toLocaleString();
+    pad.appendChild(sy);
+  }
 
   win.appendChild(pad); return win;
 }
@@ -585,6 +610,70 @@ app.get('/jobs', async (req, res) => {
 app.put('/jobs', async (req, res) => {
   const result = await writeJobs(req.body.jobs || []);
   res.json({ ok: true, persisted: result.persisted, reason: result.reason });
+});
+
+// ---------- Email/Drive sync (called by the morning Claude scan) ----------
+const SYNC_TOKEN = process.env.SYNC_TOKEN || null;
+const VALID_STATUSES = ["Next Up","In Progress","Waiting On","Review","Wrapped"];
+function normKey(s){ return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim(); }
+
+function mergeTasks(oldTasks, newTasks){
+  const out = Array.isArray(oldTasks) ? oldTasks.map(t => ({ text: String(t.text||''), done: !!t.done })) : [];
+  const idx = {};
+  out.forEach((t,i) => { idx[normKey(t.text)] = i; });
+  (Array.isArray(newTasks) ? newTasks : []).forEach(t => {
+    const text = String((t && t.text) || '').trim();
+    if (!text) return;
+    const k = normKey(text);
+    if (k in idx) { if (t.done) out[idx[k]].done = true; }
+    else { idx[k] = out.length; out.push({ text, done: !!t.done }); }
+  });
+  return out;
+}
+
+function reconcile(existing, incoming){
+  const jobs = Array.isArray(existing) ? existing.slice() : [];
+  const summary = { added: [], updated: [] };
+  const now = new Date().toISOString();
+  (Array.isArray(incoming) ? incoming : []).forEach((p, i) => {
+    if (!p || !p.title) return;
+    const key = normKey(p.key || p.title);
+    let job = jobs.find(j => j.syncKey === key) || jobs.find(j => normKey(j.title) === normKey(p.title));
+    const status = VALID_STATUSES.includes(p.status) ? p.status : null;
+    const progress = (p.progress === 0 || p.progress) ? Math.max(0, Math.min(100, Math.round(Number(p.progress) || 0))) : null;
+    if (job) {
+      job.syncKey = key; job.source = 'email';
+      if (p.client) job.client = p.client;
+      if (status) job.status = status;
+      if (progress !== null) job.progress = progress;
+      if (p.next) job.next = p.next;
+      job.tasks = mergeTasks(job.tasks, p.tasks);
+      job.lastSynced = now;
+      summary.updated.push(job.title);
+    } else {
+      job = {
+        id: 'e' + Date.now() + '_' + i,
+        title: p.title, client: p.client || '',
+        status: status || 'Next Up', progress: progress || 0,
+        next: p.next || '', tasks: mergeTasks([], p.tasks),
+        source: 'email', syncKey: key, lastSynced: now
+      };
+      jobs.push(job);
+      summary.added.push(job.title);
+    }
+  });
+  return { jobs, summary };
+}
+
+app.post('/sync', async (req, res) => {
+  const token = req.get('x-sync-token') || (req.body && req.body.token);
+  if (!SYNC_TOKEN) return res.status(503).json({ error: 'SYNC_TOKEN is not set on the server.' });
+  if (token !== SYNC_TOKEN) return res.status(401).json({ error: 'Bad sync token.' });
+  const current = await readJobs();
+  const { jobs, summary } = reconcile(current, req.body.projects);
+  if (req.query.dryRun) return res.json({ ok: true, dryRun: true, summary, jobs });
+  const result = await writeJobs(jobs);
+  res.json({ ok: true, persisted: result.persisted, summary });
 });
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
